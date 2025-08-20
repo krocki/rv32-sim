@@ -6,6 +6,7 @@
 #include <fstream>
 #include <iterator>
 #include <cassert>
+#include <climits>
 
 // -----------------------------------------------------------------------------
 // Tiny *cycle-accurate* RV32I simulator with full trace output
@@ -21,6 +22,10 @@ struct CPU {
   uint32_t x[32]{};          // integer registers
   uint64_t cycles = 0;
   std::vector<uint8_t> mem;  // flat little-endian memory
+  
+  // Atomic extension state
+  bool has_reservation = false;
+  uint32_t reservation_addr = 0;
 
   explicit CPU(size_t mem_size) : mem(mem_size) {}
 
@@ -99,9 +104,33 @@ struct CPU {
       if(f3==1||f3==5) os << " x"<<rd<<",x"<<rs1<<","<<(imm_i() & 31);
       else os << " x"<<rd<<",x"<<rs1<<","<<imm_i();
     } break;
-    case 0x33:{ const char* m[] = {"add","sll","slt","sltu","xor","srl","or","and"};
-      if(f3==0 && f7) os<<"sub"; else if(f3==5 && f7) os<<"sra"; else os<<m[f3];
+    case 0x33:{
+      if(f7==1) { // M extension
+        const char* m[] = {"mul","mulh","mulhsu","mulhu","div","divu","rem","remu"};
+        os<<m[f3];
+      } else { // Base RV32I
+        const char* m[] = {"add","sll","slt","sltu","xor","srl","or","and"};
+        if(f3==0 && f7) os<<"sub"; else if(f3==5 && f7) os<<"sra"; else os<<m[f3];
+      }
       os << " x"<<rd<<",x"<<rs1<<",x"<<rs2; } break;
+    case 0x2f: { // A extension
+      if (f3 == 2) {
+        uint32_t f5 = ins >> 27;
+        if (f5 == 0x00) os << "amoadd.w";
+        else if (f5 == 0x01) os << "amoswap.w";
+        else if (f5 == 0x02) os << "lr.w";
+        else if (f5 == 0x03) os << "sc.w";
+        else if (f5 == 0x04) os << "amoxor.w";
+        else if (f5 == 0x08) os << "amoor.w";
+        else if (f5 == 0x0c) os << "amoand.w";
+        else if (f5 == 0x10) os << "amomin.w";
+        else if (f5 == 0x14) os << "amomax.w";
+        else if (f5 == 0x18) os << "amominu.w";
+        else if (f5 == 0x1c) os << "amomaxu.w";
+        else os << "amo.unknown";
+        os << " x"<<rd<<",x"<<rs2<<",(x"<<rs1<<")";
+      }
+    } break;
     case 0x0f: os << "fence"; break;
     case 0x73: os << "ecall"; break;
     default:   os << "illegal"; break;
@@ -190,16 +219,131 @@ struct CPU {
       pc += 4;
     } break;
     case 0x33: {
-      switch (f3) {
-        case 0: x[rd] = f7 ? x[rs1] - x[rs2] : x[rs1] + x[rs2]; break;   // SUB/ADD
-        case 1: x[rd] = x[rs1] << (x[rs2] & 0x1f); break;                // SLL
-        case 2: x[rd] = (int32_t)x[rs1] <  (int32_t)x[rs2]; break;       // SLT
-        case 3: x[rd] = x[rs1] <  x[rs2]; break;                         // SLTU
-        case 4: x[rd] = x[rs1] ^ x[rs2]; break;                          // XOR
-        case 5: x[rd] = f7 ? (int32_t)x[rs1] >> (x[rs2] & 0x1f)
-                            : x[rs1] >> (x[rs2] & 0x1f); break;          // SRA/SRL
-        case 6: x[rd] = x[rs1] | x[rs2]; break;                          // OR
-        case 7: x[rd] = x[rs1] & x[rs2]; break;                          // AND
+      if (f7 == 1) {  // M extension instructions
+        switch (f3) {
+          case 0: x[rd] = x[rs1] * x[rs2]; break;                        // MUL
+          case 1: {                                                       // MULH
+            int64_t a = (int32_t)x[rs1];
+            int64_t b = (int32_t)x[rs2];
+            x[rd] = (a * b) >> 32;
+          } break;
+          case 2: {                                                       // MULHSU
+            int64_t a = (int32_t)x[rs1];
+            uint64_t b = x[rs2];
+            x[rd] = (a * b) >> 32;
+          } break;
+          case 3: {                                                       // MULHU
+            uint64_t a = x[rs1];
+            uint64_t b = x[rs2];
+            x[rd] = (a * b) >> 32;
+          } break;
+          case 4: {                                                       // DIV
+            int32_t a = x[rs1];
+            int32_t b = x[rs2];
+            if (b == 0) x[rd] = -1;
+            else if (a == INT32_MIN && b == -1) x[rd] = INT32_MIN;
+            else x[rd] = a / b;
+          } break;
+          case 5: {                                                       // DIVU
+            if (x[rs2] == 0) x[rd] = 0xffffffff;
+            else x[rd] = x[rs1] / x[rs2];
+          } break;
+          case 6: {                                                       // REM
+            int32_t a = x[rs1];
+            int32_t b = x[rs2];
+            if (b == 0) x[rd] = a;
+            else if (a == INT32_MIN && b == -1) x[rd] = 0;
+            else x[rd] = a % b;
+          } break;
+          case 7: {                                                       // REMU
+            if (x[rs2] == 0) x[rd] = x[rs1];
+            else x[rd] = x[rs1] % x[rs2];
+          } break;
+        }
+      } else {  // Base RV32I instructions
+        switch (f3) {
+          case 0: x[rd] = f7 ? x[rs1] - x[rs2] : x[rs1] + x[rs2]; break; // SUB/ADD
+          case 1: x[rd] = x[rs1] << (x[rs2] & 0x1f); break;              // SLL
+          case 2: x[rd] = (int32_t)x[rs1] <  (int32_t)x[rs2]; break;     // SLT
+          case 3: x[rd] = x[rs1] <  x[rs2]; break;                       // SLTU
+          case 4: x[rd] = x[rs1] ^ x[rs2]; break;                        // XOR
+          case 5: x[rd] = f7 ? (int32_t)x[rs1] >> (x[rs2] & 0x1f)
+                              : x[rs1] >> (x[rs2] & 0x1f); break;        // SRA/SRL
+          case 6: x[rd] = x[rs1] | x[rs2]; break;                        // OR
+          case 7: x[rd] = x[rs1] & x[rs2]; break;                        // AND
+        }
+      }
+      pc += 4;
+    } break;
+    case 0x2f: { // A extension (atomic operations)
+      if (f3 == 2) { // Word atomics
+        uint32_t addr = x[rs1];
+        uint32_t f5 = ins >> 27;
+        switch (f5) {
+          case 0x02: { // LR.W
+            x[rd] = fetch32(addr);
+            reservation_addr = addr;
+            has_reservation = true;
+          } break;
+          case 0x03: { // SC.W
+            if (has_reservation && reservation_addr == addr) {
+              store32(addr, x[rs2]);
+              x[rd] = 0; // success
+              has_reservation = false;
+            } else {
+              x[rd] = 1; // failure
+            }
+          } break;
+          case 0x01: { // AMOSWAP.W
+            uint32_t old = fetch32(addr);
+            store32(addr, x[rs2]);
+            x[rd] = old;
+          } break;
+          case 0x00: { // AMOADD.W
+            uint32_t old = fetch32(addr);
+            store32(addr, old + x[rs2]);
+            x[rd] = old;
+          } break;
+          case 0x04: { // AMOXOR.W
+            uint32_t old = fetch32(addr);
+            store32(addr, old ^ x[rs2]);
+            x[rd] = old;
+          } break;
+          case 0x0c: { // AMOAND.W
+            uint32_t old = fetch32(addr);
+            store32(addr, old & x[rs2]);
+            x[rd] = old;
+          } break;
+          case 0x08: { // AMOOR.W
+            uint32_t old = fetch32(addr);
+            store32(addr, old | x[rs2]);
+            x[rd] = old;
+          } break;
+          case 0x10: { // AMOMIN.W
+            int32_t old = fetch32(addr);
+            int32_t val = x[rs2];
+            store32(addr, (old < val) ? old : val);
+            x[rd] = old;
+          } break;
+          case 0x14: { // AMOMAX.W
+            int32_t old = fetch32(addr);
+            int32_t val = x[rs2];
+            store32(addr, (old > val) ? old : val);
+            x[rd] = old;
+          } break;
+          case 0x18: { // AMOMINU.W
+            uint32_t old = fetch32(addr);
+            uint32_t val = x[rs2];
+            store32(addr, (old < val) ? old : val);
+            x[rd] = old;
+          } break;
+          case 0x1c: { // AMOMAXU.W
+            uint32_t old = fetch32(addr);
+            uint32_t val = x[rs2];
+            store32(addr, (old > val) ? old : val);
+            x[rd] = old;
+          } break;
+        }
       }
       pc += 4;
     } break;

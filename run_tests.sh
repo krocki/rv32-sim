@@ -37,6 +37,17 @@ run_test() {
     local test_name="$1"
     local test_file="$TEST_DIR/$test_name.S"
     
+    # Check if it's an M extension test
+    if [[ " ${RV32UM_TESTS[@]} " =~ " ${test_name} " ]]; then
+        test_file="$RISCV_TESTS_DIR/isa/rv32um/$test_name.S"
+    # Check if it's an A extension test
+    elif [[ " ${RV32UA_TESTS[@]} " =~ " ${test_name} " ]]; then
+        test_file="$RISCV_TESTS_DIR/isa/rv32ua/$test_name.S"
+    # Check if it's a C extension test
+    elif [[ " ${RV32UC_TESTS[@]} " =~ " ${test_name} " ]]; then
+        test_file="$RISCV_TESTS_DIR/isa/rv32uc/$test_name.S"
+    fi
+    
     if [ ! -f "$test_file" ]; then
         echo -e "${RED}SKIP${NC} $test_name (file not found)"
         return 2
@@ -44,8 +55,9 @@ run_test() {
     
     echo -n "Testing $test_name... "
     
-    # Compile the test
-    "${CROSS_COMPILE}gcc" -march=rv32i_zicsr -mabi=ilp32 \
+    # Compile the test  
+    # Note: We compile without C extension since our simulator doesn't support compressed instructions yet
+    "${CROSS_COMPILE}gcc" -march=rv32ima_zicsr -mabi=ilp32 \
         -static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles \
         -I"$RISCV_TESTS_DIR/env/p" \
         -I"$RISCV_TESTS_DIR/isa/macros/scalar" \
@@ -88,7 +100,7 @@ run_test() {
 }
 
 # List of basic rv32ui tests to run
-BASIC_TESTS=(
+RV32UI_TESTS=(
     "simple"
     "add" 
     "addi"
@@ -128,6 +140,40 @@ BASIC_TESTS=(
     "xor"
     "xori"
 )
+
+# List of rv32um (M extension) tests
+RV32UM_TESTS=(
+    "mul"
+    "mulh"
+    "mulhsu"
+    "mulhu"
+    "div"
+    "divu"
+    "rem"
+    "remu"
+)
+
+# List of rv32ua (A extension) tests
+RV32UA_TESTS=(
+    "amoadd_w"
+    "amoand_w"
+    "amomax_w"
+    "amomaxu_w"
+    "amomin_w"
+    "amominu_w"
+    "amoor_w"
+    "amoswap_w"
+    "amoxor_w"
+    "lrsc"
+)
+
+# List of rv32uc (C extension) tests
+RV32UC_TESTS=(
+    "rvc"
+)
+
+# Combine all tests
+BASIC_TESTS=("${RV32UI_TESTS[@]}" "${RV32UM_TESTS[@]}" "${RV32UA_TESTS[@]}" "${RV32UC_TESTS[@]}")
 
 # If arguments provided, run only those tests
 if [ $# -gt 0 ]; then
