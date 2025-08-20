@@ -10,7 +10,7 @@ NC='\033[0m' # No Color
 
 # Configuration
 RISCV_TESTS_DIR="./riscv-tests"
-SIMULATOR="./rv32imac"
+SIMULATOR="./rv32ima"
 TEST_DIR="$RISCV_TESTS_DIR/isa/rv32ui"
 TEMP_DIR="./test_temp"
 CROSS_COMPILE="riscv64-unknown-elf-"
@@ -21,7 +21,7 @@ mkdir -p "$TEMP_DIR"
 # Check if simulator exists
 if [ ! -f "$SIMULATOR" ]; then
     echo -e "${RED}Error: Simulator not found at $SIMULATOR${NC}"
-    echo "Please compile your simulator first: g++ -o rv32imac rv32imac.cc"
+    echo "Please compile your simulator first: g++ -o rv32ima rv32ima.cc"
     exit 1
 fi
 

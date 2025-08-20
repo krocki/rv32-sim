@@ -1,176 +1,148 @@
-# RV32IMAC RISC-V Simulator
+# RV32IMA RISC-V Simulator
 
-A complete RISC-V RV32IMAC processor simulator with full instruction trace output and comprehensive test suite support.
+A simple RISC-V RV32IMA instruction set simulator with optional trace output.
 
 ## Features
 
-### Supported Instruction Set Extensions
-
-- **RV32I** - Base Integer Instruction Set (32-bit)
-- **RV32M** - Standard Extension for Integer Multiplication and Division
-- **RV32A** - Standard Extension for Atomic Instructions
-- **RV32C** - Standard Extension for Compressed Instructions (16-bit)
-
-### Additional Features
-
-- **Full instruction tracing** with cycle-accurate execution
-- **Register state display** after each instruction
-- **Comprehensive disassembly** for both 32-bit and 16-bit instructions
-- **Memory-mapped I/O** support
-- **Atomic operations** with reservation tracking
-- **Compressed instruction expansion** with proper encoding
-
-## Instruction Set Support
-
-### RV32I Base Instructions (38 instructions)
-- **Arithmetic**: ADD, ADDI, SUB, SLT, SLTI, SLTU, SLTIU
-- **Logical**: AND, ANDI, OR, ORI, XOR, XORI
-- **Shift**: SLL, SLLI, SRL, SRLI, SRA, SRAI
-- **Load/Store**: LB, LH, LW, LBU, LHU, SB, SH, SW
-- **Branch**: BEQ, BNE, BLT, BGE, BLTU, BGEU
-- **Jump**: JAL, JALR
-- **Upper Immediate**: LUI, AUIPC
-- **System**: ECALL, EBREAK
-- **Fence**: FENCE, FENCE.I
-
-### RV32M Extension (8 instructions)
-- **Multiply**: MUL, MULH, MULHSU, MULHU
-- **Divide**: DIV, DIVU, REM, REMU
-
-### RV32A Extension (10 instructions)
-- **Load-Reserved/Store-Conditional**: LR.W, SC.W
-- **Atomic Memory Operations**: 
-  - AMOADD.W, AMOAND.W, AMOOR.W, AMOXOR.W
-  - AMOSWAP.W, AMOMIN.W, AMOMAX.W
-  - AMOMINU.W, AMOMAXU.W
-
-### RV32C Extension (Compressed - 16-bit instructions)
-- **Quadrant 0**: C.ADDI4SPN, C.LW, C.SW
-- **Quadrant 1**: C.ADDI, C.JAL, C.LI, C.LUI, C.ADDI16SP, C.SRLI, C.SRAI, C.ANDI, C.SUB, C.XOR, C.OR, C.AND, C.J, C.BEQZ, C.BNEZ
-- **Quadrant 2**: C.SLLI, C.LWSP, C.JR, C.MV, C.EBREAK, C.JALR, C.ADD, C.SWSP
+- **RV32I**: Base integer instruction set (32-bit)
+- **RV32M**: Standard extension for integer multiplication and division
+- **RV32A**: Standard extension for atomic instructions
+- **Quiet by default**: Runs silently for testing and production use
+- **Optional trace mode**: Full instruction and register state tracing with `--trace` flag
+- **System calls**: Basic Linux syscall support (exit, write)
+- **CSR support**: Basic Control and Status Register support
 
 ## Building
 
 ```bash
-g++ -o rv32imac rv32imac.cc
+g++ -O3 -o rv32ima rv32ima.cc
 ```
 
 ## Usage
 
-### Basic Execution
+### Basic Execution (Quiet Mode)
 ```bash
-./rv32imac program.bin
+./rv32ima program.bin
 ```
 
-### Example Output
+### Trace Mode (Verbose Output)
+```bash
+./rv32ima --trace program.bin
+```
+
+The simulator loads the binary at address 0x0 and starts execution from there.
+
+### Example Output (Trace Mode)
+
 ```
 [cycle 0] pc=0x00000000 ins=0x00100e13  addi x28,x0,1
 x00:0x00000000  x01:0x00000000  x02:0x00000000  x03:0x00000000
 x04:0x00000000  x05:0x00000000  x06:0x00000000  x07:0x00000000
 ...
-
-[cycle 1] pc=0x00000004 ins=0xa091  c.j
-x00:0x00000000  x01:0x00000000  x02:0x00000000  x03:0x00000000
-...
 ```
 
-### Preparing RISC-V Programs
+## Hello World Example
 
-Compile RISC-V assembly or C code:
+1. Create a hello world program (`hello.S`):
+
+```asm
+.section .text
+.global _start
+
+_start:
+    # Print "Hello, World!\n"
+    li a7, 64           # sys_write
+    li a0, 1            # stdout
+    la a1, msg          # buffer
+    li a2, 14           # length
+    ecall
+    
+    # Exit
+    li a7, 93           # sys_exit
+    li a0, 0            # exit code
+    ecall
+
+.section .data
+msg:
+    .ascii "Hello, World!\n"
+```
+
+2. Assemble and link:
+
 ```bash
-# Assembly
-riscv64-unknown-elf-as -march=rv32imac -mabi=ilp32 -o program.o program.S
-riscv64-unknown-elf-objcopy -O binary program.o program.bin
+riscv64-unknown-elf-as -march=rv32ima -mabi=ilp32 hello.S -o hello.o
+riscv64-unknown-elf-ld -m elf32lriscv -Ttext=0x10000 hello.o -o hello.elf
+riscv64-unknown-elf-objcopy -O binary hello.elf hello.bin
+```
 
-# C code with compressed instructions
-riscv64-unknown-elf-gcc -march=rv32imac -mabi=ilp32 -static -nostdlib \
-    -T linker.ld -o program.elf program.c
-riscv64-unknown-elf-objcopy -O binary program.elf program.bin
+3. Run:
+
+```bash
+# Quiet mode - just prints "Hello, World!"
+./rv32ima hello.bin
+
+# Trace mode - shows full execution trace
+./rv32ima --trace hello.bin
 ```
 
 ## Testing
 
-### Official RISC-V Test Suite
-
-Clone and test with the official RISC-V compliance tests:
+Run the official RISC-V test suite:
 
 ```bash
-# Clone official test suite
-git clone https://github.com/riscv-software-src/riscv-tests.git
-
-# Run basic RV32IMA tests (57 tests)
 ./run_tests.sh
-
-# Run comprehensive tests including compressed instructions (38 tests)  
-./run_compressed_tests.sh
-
-# Run all available test suites (83 tests across multiple categories)
-./test_all.sh
 ```
 
-### Test Categories
+This will compile and run the official RISC-V tests for the RV32IMA instruction set (57 tests).
 
-1. **RV32UI Tests** (38 tests) - Base integer instructions
-2. **RV32UM Tests** (8 tests) - Multiply/divide instructions  
-3. **RV32UA Tests** (10 tests) - Atomic instructions
-4. **RV32UC Tests** (1 test) - Compressed instructions
-5. **RV32SI Tests** (19 tests) - Supervisor-mode instructions
-6. **RV32MI Tests** (7 tests) - Machine-mode instructions
+## Implementation Notes
 
-### Current Test Results
-- **Basic Tests**: 57/57 passing (RV32IMA)
-- **Compressed Tests**: 38/38 passing (RV32IMAC)  
-- **All Tests**: 83/83 passing (Complete test suite)
+- The simulator implements a flat memory model with 2MB of RAM
+- Quiet mode by default for efficient testing
+- Optional trace mode shows PC, instruction, decoded instruction, and all registers
+- The x0 register is hardwired to zero
+- Atomic operations are simplified (no true atomicity with multiple cores)
+- CSR instructions provide basic support for cycle counters
 
-## Architecture Details
+## Supported Instructions
 
-### Memory Layout
-- Flat 32-bit address space
-- Little-endian byte ordering
-- 1MB default memory size
-- Memory-mapped execution starting at address 0x0
+### RV32I Base Integer Instructions (38 instructions)
+- **Arithmetic**: ADD, SUB, ADDI
+- **Logical**: AND, OR, XOR, ANDI, ORI, XORI  
+- **Shifts**: SLL, SRL, SRA, SLLI, SRLI, SRAI
+- **Comparison**: SLT, SLTU, SLTI, SLTIU
+- **Load/Store**: LB, LH, LW, LBU, LHU, SB, SH, SW
+- **Branches**: BEQ, BNE, BLT, BGE, BLTU, BGEU
+- **Jumps**: JAL, JALR
+- **Upper immediate**: LUI, AUIPC
+- **System**: ECALL, EBREAK, FENCE
+- **CSR**: CSRRW, CSRRS, CSRRC, CSRRWI, CSRRSI, CSRRCI
 
-### Register File
-- 32 general-purpose registers (x0-x31)
-- x0 hardwired to zero
-- Full register state displayed in trace output
+### RV32M Multiply/Divide Extension (8 instructions)
+- MUL, MULH, MULHSU, MULHU
+- DIV, DIVU, REM, REMU
 
-### Atomic Operations
-- Reservation tracking for LR/SC instructions
-- Support for all AMO operations
-- Proper memory ordering semantics
+### RV32A Atomic Extension (11 instructions)
+- LR.W, SC.W
+- AMOADD.W, AMOSWAP.W, AMOXOR.W, AMOOR.W, AMOAND.W
+- AMOMIN.W, AMOMAX.W, AMOMINU.W, AMOMAXU.W
 
-### Compressed Instructions
-- Automatic detection of 16-bit vs 32-bit instructions
-- Real-time expansion to 32-bit equivalents
-- Supports all standard RVC instruction encodings
+## Performance
 
-## Implementation Details
+The simulator runs efficiently in quiet mode, making it suitable for:
+- Automated testing
+- Continuous integration
+- Performance benchmarking
+- Educational purposes
 
-### Key Components
-- `CPU` struct with complete processor state
-- `expand_compressed()` - Expands 16-bit to 32-bit instructions
-- `disasm()` - Comprehensive disassembler for both formats
-- `step()` - Single instruction execution with full tracing
-
-### Instruction Decoding
-- Automatic compressed/uncompressed detection
-- Proper immediate field extraction and sign extension
-- Complete opcode dispatch for all supported instructions
-
-### Error Handling
-- Invalid instruction detection
-- Proper exit codes for test integration
-- Comprehensive error messages with PC context
+Use trace mode when you need to debug or understand program execution.
 
 ## Files
 
-- `rv32imac.cc` - Main simulator implementation
-- `rv32i_backup.cc` - Backup of original RV32I-only implementation
-- `run_tests.sh` - Basic RV32IMA test runner
-- `run_compressed_tests.sh` - Compressed instruction test runner  
-- `test_all.sh` - Comprehensive test suite runner
+- `rv32ima.cc` - Main simulator implementation
+- `run_tests.sh` - Test runner for official RISC-V tests
 - `simple_link.ld` - Linker script for test programs
+- `hello.S` - Example hello world program
 - `riscv-tests/` - Official RISC-V test suite (git submodule)
 
 ## Prerequisites
@@ -188,7 +160,7 @@ sudo apt-get install gcc-riscv64-unknown-elf
 # From source
 git clone https://github.com/riscv/riscv-gnu-toolchain
 cd riscv-gnu-toolchain
-./configure --prefix=/opt/riscv --with-arch=rv32imac --with-abi=ilp32
+./configure --prefix=/opt/riscv --with-arch=rv32ima --with-abi=ilp32
 make
 ```
 
