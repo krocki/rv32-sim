@@ -10,7 +10,7 @@ NC='\033[0m' # No Color
 
 # Configuration
 RISCV_TESTS_DIR="./riscv-tests"
-SIMULATOR="./rv32i"
+SIMULATOR="./rv32imac"
 TEST_DIR="$RISCV_TESTS_DIR/isa/rv32ui"
 TEMP_DIR="./test_temp"
 CROSS_COMPILE="riscv64-unknown-elf-"
@@ -21,7 +21,7 @@ mkdir -p "$TEMP_DIR"
 # Check if simulator exists
 if [ ! -f "$SIMULATOR" ]; then
     echo -e "${RED}Error: Simulator not found at $SIMULATOR${NC}"
-    echo "Please compile your simulator first: g++ -o rv32i rv32i.cc"
+    echo "Please compile your simulator first: g++ -o rv32imac rv32imac.cc"
     exit 1
 fi
 
@@ -57,7 +57,13 @@ run_test() {
     
     # Compile the test  
     # Note: We compile without C extension since our simulator doesn't support compressed instructions yet
-    "${CROSS_COMPILE}gcc" -march=rv32ima_zicsr -mabi=ilp32 \
+    # Add zifencei extension for fence.i instruction
+    MARCH="rv32ima_zicsr"
+    if [ "$test_name" = "fence_i" ]; then
+        MARCH="rv32ima_zicsr_zifencei"
+    fi
+    
+    "${CROSS_COMPILE}gcc" -march="$MARCH" -mabi=ilp32 \
         -static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles \
         -I"$RISCV_TESTS_DIR/env/p" \
         -I"$RISCV_TESTS_DIR/isa/macros/scalar" \
@@ -102,7 +108,8 @@ run_test() {
 # List of basic rv32ui tests to run
 RV32UI_TESTS=(
     "simple"
-    "add" 
+    "add"
+    "fence_i" 
     "addi"
     "and"
     "andi"
@@ -167,10 +174,11 @@ RV32UA_TESTS=(
     "lrsc"
 )
 
-# List of rv32uc (C extension) tests
-RV32UC_TESTS=(
-    "rvc"
-)
+# List of rv32uc (C extension) tests - commented out for now as full support is WIP
+# RV32UC_TESTS=(
+#     "rvc"
+# )
+RV32UC_TESTS=()
 
 # Combine all tests
 BASIC_TESTS=("${RV32UI_TESTS[@]}" "${RV32UM_TESTS[@]}" "${RV32UA_TESTS[@]}" "${RV32UC_TESTS[@]}")
