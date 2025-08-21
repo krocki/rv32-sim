@@ -1,0 +1,17 @@
+CXX = g++
+CXXFLAGS = -O2 -std=c++17 -Wall -Wextra
+SDL_FLAGS = $(shell pkg-config --cflags --libs sdl2)
+
+all: rv32ima_sdl
+
+rv32ima_sdl: rv32ima_sdl.cc sdl_framebuffer.cc sdl_framebuffer.h rv32ima.cc
+	$(CXX) $(CXXFLAGS) -o rv32ima_sdl rv32ima_sdl.cc sdl_framebuffer.cc $(SDL_FLAGS)
+
+clean:
+	rm -f rv32ima_sdl
+
+install-deps:
+	sudo apt-get update
+	sudo apt-get install -y libsdl2-dev pkg-config
+
+.PHONY: all clean install-deps
