@@ -19,9 +19,9 @@
 
 
 #include <errno.h>
-#include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
+#include <stdint.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 
@@ -120,51 +120,37 @@ static int fs_initialized = 0;
 // External symbols for the embedded WAD file
 extern unsigned char _binary_doom1_real_wad_start;
 extern unsigned char _binary_doom1_real_wad_end;
+extern unsigned int _binary_doom1_real_wad_size;
 
 static void init_fs(void) {
     if (!fs_initialized) {
         debug_puts("init_fs: Using REAL DOOM1.WAD\n");
         
-        // The WAD is embedded at a specific offset in the binary
-        // It should be around 0x80048b20 based on the binary layout
-        unsigned char *wad_start = (unsigned char *)0x80048b20;
+        // Use the linker-generated symbols for the WAD location
+        unsigned char *wad_start = &_binary_doom1_real_wad_start;
+        unsigned char *wad_end = &_binary_doom1_real_wad_end;
+        uint32_t wad_size = (uint32_t)(&_binary_doom1_real_wad_size);
         
-        // Verify it's actually there
-        debug_puts("init_fs: Checking for IWAD at fixed location 0x80048b20...\n");
-        if (wad_start[0] == 'I' && wad_start[1] == 'W' && wad_start[2] == 'A' && wad_start[3] == 'D') {
-            debug_puts("init_fs: Found IWAD at expected location!\n");
-        } else {
-            // If not at expected location, search for it
-            debug_puts("init_fs: IWAD not at expected location, searching...\n");
-            unsigned char *search_start = (unsigned char *)0x80000000;
-            wad_start = NULL;
-            
-            for (uint32_t offset = 0x40000; offset < 0x500000; offset += 4) {
-                unsigned char *test = search_start + offset;
-                if (test[0] == 'I' && test[1] == 'W' && test[2] == 'A' && test[3] == 'D') {
-                    wad_start = test;
-                    debug_puts("init_fs: Found IWAD at ");
-                    debug_hex((unsigned int)wad_start);
-                    debug_puts("\n");
-                    break;
-                }
-            }
-        }
-        
-        if (!wad_start) {
-            debug_puts("init_fs: ERROR - Could not find IWAD magic!\n");
-            wad_start = &_binary_doom1_real_wad_start;  // Fallback
-        }
-        
-        // The WAD size is approximately 4MB
-        uint32_t wad_size = 0x4006B4;  // From ls -l output
-        
-        debug_puts("init_fs: WAD at ");
+        debug_puts("init_fs: WAD linked at ");
         debug_hex((unsigned int)wad_start);
         debug_puts(", size = ");
         debug_hex(wad_size);
         debug_puts(" bytes\n");
         
+        // Verify it's actually there
+        if (wad_start[0] == 'I' && wad_start[1] == 'W' && wad_start[2] == 'A' && wad_start[3] == 'D') {
+            debug_puts("init_fs: Found valid IWAD at linked location!\n");
+        } else {
+            debug_puts("init_fs: ERROR - WAD at linked location is not valid!\n");
+            debug_puts("init_fs: First bytes: ");
+            for (int i = 0; i < 4; i++) {
+                debug_hex(wad_start[i]);
+                debug_puts(" ");
+            }
+            debug_puts("\n");
+        }
+        
+        // Setup the filesystem entry for the WAD
         fs[0].name = "doom1.wad";
         fs[0].len = wad_size;
         fs[0].addr = (void*)wad_start;
@@ -276,12 +262,49 @@ _read(int fd, void *buf, size_t nbyte)
 
     // For first read, dump the data being read
     if (read_count == 1) {
-        debug_puts("First read data: ");
+        debug_puts("First read data (hex bytes): ");
         unsigned char* data = (unsigned char*)(fds[fd].data + fds[fd].offset);
         for (int i = 0; i < (nbyte < 16 ? nbyte : 16); i++) {
-            debug_hex(data[i]);
-            debug_puts(" ");
+            char hex[] = "0123456789ABCDEF";
+            *uart = hex[(data[i] >> 4) & 0xF];
+            *uart = hex[data[i] & 0xF];
+            *uart = ' ';
         }
+        debug_puts("\n");
+        
+        // Also show as characters
+        debug_puts("First read data (chars): ");
+        for (int i = 0; i < (nbyte < 12 ? nbyte : 12); i++) {
+            if (data[i] >= 32 && data[i] < 127) {
+                *uart = data[i];
+            } else {
+                *uart = '.';
+            }
+        }
+        debug_puts("\n");
+        
+        // Show first 3 32-bit values from WAD header
+        if (nbyte >= 12) {
+            debug_puts("WAD header parsed: ID=");
+            for (int i = 0; i < 4; i++) {
+                *uart = data[i];
+            }
+            
+            // Read numlumps (little-endian)
+            uint32_t numlumps = data[4] | (data[5] << 8) | (data[6] << 16) | (data[7] << 24);
+            debug_puts(", numlumps=");
+            debug_hex(numlumps);
+            
+            // Read infotableofs (little-endian)
+            uint32_t infotableofs = data[8] | (data[9] << 8) | (data[10] << 16) | (data[11] << 24);
+            debug_puts(", infotableofs=");
+            debug_hex(infotableofs);
+            debug_puts("\n");
+        }
+        
+        // Show address of data
+        debug_puts("Reading from address: ");
+        debug_hex((unsigned int)(fds[fd].data + fds[fd].offset));
         debug_puts("\n");
     }
 
@@ -405,12 +428,47 @@ access(const char *pathname, int mode)
     return 0;
 }
 
+// Provide errno for bare-metal
+static int errno_val = 0;
+int *__errno(void) {
+    return &errno_val;
+}
+
+// Forward declaration of mini_vsnprintf (provided by mini-printf.c)
+int mini_vsnprintf(char *buf, unsigned int size, const char *fmt, va_list ap);
+
+// Wrapper for vsnprintf -> mini_vsnprintf
+int vsnprintf(char *buf, size_t size, const char *fmt, va_list ap) {
+    return mini_vsnprintf(buf, size, fmt, ap);
+}
+
+// sprintf wrapper
+int sprintf(char *buf, const char *fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    int len = mini_vsnprintf(buf, 1024, fmt, args);
+    va_end(args);
+    return len;
+}
+
+// Minimal memset implementation
+void *memset(void *s, int c, size_t n) {
+    unsigned char *p = s;
+    while (n--) {
+        *p++ = (unsigned char)c;
+    }
+    return s;
+}
+
+// _impure_ptr is provided by libc_nano, don't define it here
+
 // Override printf to use our UART directly
+
 int printf(const char *fmt, ...) {
     static char buf[256];
     va_list args;
     va_start(args, fmt);
-    int len = vsnprintf(buf, sizeof(buf), fmt, args);
+    int len = mini_vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
     
     for (int i = 0; i < len && buf[i]; i++) {
@@ -420,29 +478,5 @@ int printf(const char *fmt, ...) {
     return len;
 }
 
-// Stub implementations for stdio FILE operations
-FILE *fopen(const char *pathname, const char *mode) {
-    // For config files, just return NULL (file not found)
-    // This will make DOOM use defaults
-    return NULL;
-}
-
-int fclose(FILE *stream) {
-    return 0;
-}
-
-int feof(FILE *stream) {
-    return 1; // Always at end
-}
-
-int fscanf(FILE *stream, const char *format, ...) {
-    return 0; // No items read
-}
-
-int fprintf(FILE *stream, const char *format, ...) {
-    return 0;
-}
-
-char *fgets(char *s, int size, FILE *stream) {
-    return NULL;
-}
+// FILE operations are not needed for DOOM to run
+// These functions are only used for config file handling which we skip

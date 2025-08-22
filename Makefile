@@ -46,7 +46,7 @@ rv32ima_ref_sdl: rv32ima_ref_sdl.c
 doom: src_doom/riscv/doom-riscv.bin
 
 src_doom/riscv/doom-riscv.bin: src_doom/riscv/doom-riscv.elf
-	cd src_doom/riscv && $(OBJCOPY) -O binary doom-riscv.elf doom-riscv.bin
+	$(OBJCOPY) -O binary src_doom/riscv/doom-riscv.elf src_doom/riscv/doom-riscv.bin
 
 src_doom/riscv/doom-riscv.elf: doom-sources
 	cd src_doom/riscv && \
@@ -56,7 +56,7 @@ src_doom/riscv/doom-riscv.elf: doom-sources
 
 # WAD object file - using real DOOM1.WAD
 src_doom/riscv/wad_real.o: src_doom/riscv/doom1_real.wad
-	cd src_doom/riscv && $(OBJCOPY) -I binary -O elf32-littleriscv -B riscv doom1_real.wad wad_real.o
+	$(OBJCOPY) -I binary -O elf32-littleriscv -B riscv src_doom/riscv/doom1_real.wad src_doom/riscv/wad_real.o
 
 # Define source files
 DOOM_SOURCES = \

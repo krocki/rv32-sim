@@ -408,7 +408,14 @@ void HU_Init(void)
     for (i=0;i<HU_FONTSIZE;i++)
     {
         sprintf(buffer, "STCFN%.3d", j++);
-        hu_font[i] = (patch_t *) W_CacheLumpName(buffer, PU_STATIC);
+        // Try to load the character, if it fails use space character as fallback
+        if (W_CheckNumForName(buffer) == -1) {
+            // Use space character (STCFN032) or first available character as fallback
+            hu_font[i] = hu_font[0];  // Use first loaded character as fallback
+            printf("Warning: %s not found, using fallback\n", buffer);
+        } else {
+            hu_font[i] = (patch_t *) W_CacheLumpName(buffer, PU_STATIC);
+        }
     }
 
 }

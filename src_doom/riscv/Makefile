@@ -5,8 +5,8 @@ OBJCOPY = $(CROSS)objcopy
 SIZE = $(CROSS)size
 ICEPROG = iceprog
 
-#CFLAGS=-Wall -O2 -march=rv32im -mabi=ilp32 -ffreestanding -flto -nostdlib -nostartfiles -fomit-frame-pointer -Wl,--gc-section --specs=nano.specs -I..
-CFLAGS=-Wall -g -march=rv32im -mabi=ilp32 -ffreestanding -flto -nostartfiles -fomit-frame-pointer -Wl,--gc-section --specs=nano.specs -I..
+#CFLAGS=-Wall -O2 -march=rv32im -mabi=ilp32 -ffreestanding -flto -nostdlib -nostartfiles -fomit-frame-pointer -Wl,--gc-section -I..
+CFLAGS=-Wall -g -march=rv32im -mabi=ilp32 -ffreestanding -flto -nostdlib -nostartfiles -fomit-frame-pointer -Wl,--gc-section -I..
 
 CFLAGS += \
 	-DNORMALUNIX \
@@ -44,7 +44,7 @@ wad_real.o: doom1_real.wad
 	$(OBJCOPY) -I binary -O elf32-littleriscv -B riscv --rename-section .data=.rodata,contents,alloc,load,readonly,data doom1_real.wad wad_real.o
 
 doom-riscv.elf: riscv.lds $(addprefix ../,$(SOURCES_doom)) $(SOURCES_doom_arch)
-	$(CC) $(CFLAGS) -Wl,-Bstatic,-T,riscv.lds -o $@ $(addprefix ../,$(SOURCES_doom)) $(SOURCES_doom_arch)
+	$(CC) $(CFLAGS) -Wl,-Bstatic,-T,riscv.lds -o $@ $(addprefix ../,$(SOURCES_doom)) $(SOURCES_doom_arch) -lc_nano -lgcc -lm
 	$(SIZE) $@
 
 clean:

@@ -165,6 +165,7 @@ mini_vsnprintf(char *buffer, unsigned int buffer_len, const char *fmt, va_list v
 
 				case 'u':
 				case 'd':
+				case 'i':  // %i is same as %d
 					len = mini_itoa(va_arg(va, unsigned int), 10, 0, (ch=='u'), bf, zero_pad);
 					_puts(bf, len, &b);
 					break;

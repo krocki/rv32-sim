@@ -1,0 +1,130 @@
+# RV32IMA RISC-V Emulator Makefile
+# Builds emulator, DOOM, and debug GUI
+
+.PHONY: all clean help emulator emulator-sdl emulator-gui doom run-doom test
+
+# Configuration
+CROSS_PREFIX = riscv64-unknown-elf-
+CC = $(CROSS_PREFIX)gcc
+CXX = g++
+OBJCOPY = $(CROSS_PREFIX)objcopy
+SIZE = $(CROSS_PREFIX)size
+
+# Host compiler flags
+HOST_CFLAGS = -O3 -Wall
+HOST_CXXFLAGS = -O3 -Wall -std=c++17
+
+# SDL configuration  
+SDL_CFLAGS = $(shell sdl2-config --cflags 2>/dev/null || echo "-I/usr/include/SDL2")
+SDL_LIBS = $(shell sdl2-config --libs 2>/dev/null || echo "-lSDL2")
+
+# ImGui configuration for debug GUI
+IMGUI_DIR = gui/imgui
+GUI_INCLUDES = -I$(IMGUI_DIR) -I$(IMGUI_DIR)/backends -I$(IMGUI_DIR)/misc/cpp
+GUI_SOURCES = $(IMGUI_DIR)/imgui.cpp \
+              $(IMGUI_DIR)/imgui_draw.cpp \
+              $(IMGUI_DIR)/imgui_tables.cpp \
+              $(IMGUI_DIR)/imgui_widgets.cpp \
+              $(IMGUI_DIR)/misc/cpp/imgui_stdlib.cpp \
+              $(IMGUI_DIR)/backends/imgui_impl_sdl2.cpp \
+              $(IMGUI_DIR)/backends/imgui_impl_opengl3.cpp
+
+# GLEW/OpenGL for GUI
+GUI_LIBS = $(SDL_LIBS) -lGLEW -framework OpenGL -ldl -pthread
+
+# DOOM configuration
+DOOM_DIR = src_doom
+DOOM_RISCV_DIR = $(DOOM_DIR)/riscv
+DOOM_CFLAGS = -Wall -g -march=rv32im -mabi=ilp32 -ffreestanding -flto -nostartfiles
+DOOM_CFLAGS += -fomit-frame-pointer -Wl,--gc-section
+DOOM_CFLAGS += -I$(DOOM_DIR) -DNORMALUNIX
+
+# Default target
+all: help
+
+help:
+	@echo "RV32IMA RISC-V Emulator Build System"
+	@echo ""
+	@echo "Available targets:"
+	@echo "  make emulator       - Build basic RV32IMA emulator"
+	@echo "  make emulator-sdl   - Build emulator with SDL framebuffer support"
+	@echo "  make emulator-gui   - Build emulator with ImGui debug interface"
+	@echo "  make doom           - Build DOOM for RISC-V"
+	@echo "  make run-doom       - Build and run DOOM"
+	@echo "  make test           - Run RISC-V compliance tests"
+	@echo "  make clean          - Remove all built files"
+	@echo "  make all-targets    - Build all emulator variants and DOOM"
+	@echo ""
+	@echo "Quick start:"
+	@echo "  make emulator-sdl && make doom && make run-doom"
+
+# Main emulator (console only)
+emulator: rv32ima
+rv32ima: rv32ima_base.cc rv32ima_core.h
+	$(CXX) $(HOST_CXXFLAGS) -o $@ rv32ima_base.cc
+
+# SDL-enabled emulator (for DOOM and graphical programs)
+emulator-sdl: rv32ima-sdl
+rv32ima-sdl: rv32ima_base.cc rv32ima_core.h rv32ima_sdl.h
+	$(CXX) $(HOST_CXXFLAGS) -DUSE_SDL $(SDL_CFLAGS) -o $@ rv32ima_base.cc $(SDL_LIBS)
+
+# Debug GUI emulator
+emulator-gui: rv32ima-gui
+rv32ima-gui: rv32ima_gui.cc rv32ima_core.h $(GUI_SOURCES)
+	$(CXX) $(HOST_CXXFLAGS) -DUSE_GUI -DIMGUI_IMPL_OPENGL_LOADER_GLEW \
+		$(GUI_INCLUDES) $(SDL_CFLAGS) -o $@ rv32ima_gui.cc $(GUI_SOURCES) $(GUI_LIBS)
+
+# DOOM build
+doom: $(DOOM_RISCV_DIR)/doom-riscv.bin
+
+$(DOOM_RISCV_DIR)/doom-riscv.bin: $(DOOM_RISCV_DIR)/doom-riscv.elf
+	$(OBJCOPY) -O binary $< $@
+	@echo "DOOM binary created: $@"
+	@ls -lh $@
+
+$(DOOM_RISCV_DIR)/wad.o: $(DOOM_RISCV_DIR)/doom1.wad
+	cd $(DOOM_RISCV_DIR) && \
+	$(OBJCOPY) -I binary -O elf32-littleriscv -B riscv doom1.wad wad.o
+
+$(DOOM_RISCV_DIR)/doom-riscv.elf: $(DOOM_RISCV_DIR)/wad.o
+	cd $(DOOM_RISCV_DIR) && \
+	$(CC) $(DOOM_CFLAGS) -Wl,-Bstatic,-T,riscv.lds -o doom-riscv.elf \
+		start.S d_main.c i_main.c i_net.c i_sound.c i_system.c i_video.c \
+		s_sound.c console.c libc_backend.c mini-printf.c wad.o \
+		$(addprefix ../,am_map.c d_items.c d_net.c doomdef.c doomstat.c \
+		dstrings.c f_finale.c f_wipe.c g_game.c hu_lib.c hu_stuff.c info.c \
+		m_argv.c m_bbox.c m_cheat.c m_fixed.c m_menu.c m_misc.c m_random.c \
+		m_swap.c p_ceilng.c p_doors.c p_enemy.c p_floor.c p_inter.c p_lights.c \
+		p_map.c p_maputl.c p_mobj.c p_plats.c p_pspr.c p_saveg.c p_setup.c \
+		p_sight.c p_spec.c p_switch.c p_telept.c p_tick.c p_user.c r_bsp.c \
+		r_data.c r_draw.c r_main.c r_plane.c r_segs.c r_sky.c r_things.c \
+		sounds.c st_lib.c st_stuff.c tables.c v_video.c wi_stuff.c w_wad.c \
+		z_zone.c) -lc_nano -lgcc -lm
+	$(SIZE) $@
+
+# Run DOOM
+run-doom: rv32ima-sdl doom
+	@echo "Starting DOOM on RV32IMA emulator..."
+	@echo "Press ESC to quit"
+	./rv32ima-sdl -f $(DOOM_RISCV_DIR)/doom-riscv.bin -c 800000000
+
+# Run tests
+test: rv32ima
+	./run_tests.sh
+
+# Build all targets
+all-targets: emulator emulator-sdl emulator-gui doom
+
+# Clean
+clean:
+	rm -f rv32ima rv32ima-sdl rv32ima-gui
+	rm -f $(DOOM_RISCV_DIR)/*.bin $(DOOM_RISCV_DIR)/*.elf $(DOOM_RISCV_DIR)/*.o
+	rm -f *.o
+	@echo "Clean complete"
+
+# Install (optional)
+install: rv32ima rv32ima-sdl
+	@echo "Installing to /usr/local/bin (requires sudo)"
+	@sudo cp rv32ima /usr/local/bin/
+	@sudo cp rv32ima-sdl /usr/local/bin/
+	@echo "Installation complete"

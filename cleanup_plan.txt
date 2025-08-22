@@ -1,0 +1,153 @@
+# RV32-SIM Cleanup Plan
+
+## Files to KEEP (Essential)
+
+### Core Emulator Files
+- rv32ima_base.cc (new consolidated emulator)
+- rv32ima_core.h (emulator definitions)
+- rv32ima_sdl.h (SDL support header)
+- rv32ima_gui.cc (GUI debugger - to be created from gui/rv32i-gui.cc)
+- Makefile (updated build system)
+- README.md (updated documentation)
+
+### DOOM Files
+- src_doom/ (entire directory with DOOM source)
+- src_doom/riscv/ (RISC-V specific DOOM code)
+
+### Test Files
+- tests/ (test programs directory)
+- run_tests.sh (test runner script)
+- hello.S (example program)
+- add.s (example program)
+
+### GUI/ImGui Files
+- gui/imgui/ (ImGui library for debugger)
+- gui/rv32i-gui.cc (source for GUI debugger)
+
+### Documentation
+- README.md (main documentation)
+- LICENSE (if exists)
+
+## Files to REMOVE (Redundant/Old)
+
+### Old Emulator Variants (replaced by rv32ima_base.cc)
+- rv32ima.cc
+- rv32ima_doom.cc
+- rv32ima_doom_console.cc
+- rv32ima_doom_console_sdl.cc
+- rv32ima_doom_console_sdl_working.cc
+- rv32ima_mmio.cc
+- rv32ima_ref_sdl.c
+- rv32ima_doom_ref_sdl.c
+- rv32i_backup.cc
+- rv32i_v0.cc
+- rv32i_v1.cc
+- mini-rv32ima-ref.c
+- mini-rv32ima.h
+- _rv32i.cc
+
+### Old Build Artifacts
+- *.o (all object files)
+- rv32ima (old binary)
+- rv32ima_doom* (old binaries)
+- rv32ima_mmio (old binary)
+- rv32ima_ref_sdl (old binary)
+- rv32ima_sdl (old binary)
+- rv32im (old binary)
+- rv32i (old binary)
+
+### Buildroot/Linux Boot Files (not needed for bare-metal)
+- buildroot-doom-backup/
+- buildroot-riscv-2018-10-20/
+- buildroot-riscv.tar.gz
+- buildroot.tar.gz
+- Image (Linux kernel)
+- images/ (Linux images directory)
+
+### Docker/Build Scripts (outdated)
+- Dockerfile.doom
+- build_doom_docker.sh
+- build_doom_docker_new.sh
+- build_sdl_doom_*.sh
+- download_doom_image*.sh
+- linux_build_doom.sh
+- test_doom_image.sh
+
+### Temporary/Test Files
+- test_temp/
+- temp_test/
+- *.bin (except essential ones in src_doom/riscv/)
+- *.elf (except essential ones in src_doom/riscv/)
+- test_*.c (various test files)
+- fb_test*
+- simple_test*
+- minimal_doom*
+
+### Documentation (outdated)
+- DOOM_HOWTO.md (old instructions)
+- DOOM_README.md (old instructions)
+- SDL_DOOM_GUIDE.md (old instructions)
+- README_old.md
+- rv32ima_doom_extensions.md
+
+### Other Directories
+- risc-666/ (alternative implementation)
+- smunaut_doom/ (alternative implementation)
+- doom-riscv/ (alternative implementation)
+- baremetal_doom/ (alternative implementation)
+- sdl_doom_build/ (build directory)
+- doom/ (if not the main DOOM source)
+
+### Miscellaneous
+- .DS_Store (macOS metadata)
+- *.dSYM (debug symbols)
+- imgui.ini (ImGui config)
+- default64mbdtc.h (can be integrated if needed)
+- crt0.S (old startup code)
+- various .ld files (except needed ones)
+- play_doom.sh, run_doom.sh, doom.sh (old scripts)
+
+## Directory Structure After Cleanup
+
+```
+rv32-sim/
+├── Makefile
+├── README.md
+├── LICENSE
+├── rv32ima_base.cc
+├── rv32ima_core.h
+├── rv32ima_sdl.h
+├── rv32ima_gui.cc
+├── src_doom/
+│   ├── riscv/
+│   └── [DOOM source files]
+├── tests/
+│   └── [test programs]
+├── gui/
+│   └── imgui/
+├── examples/
+│   ├── hello.S
+│   └── add.s
+└── run_tests.sh
+```
+
+## Git Cleanup Commands
+
+```bash
+# Create backup branch
+git checkout -b pre-cleanup-backup
+
+# Return to main
+git checkout main
+
+# Remove files (use git rm for tracked files)
+git rm rv32ima.cc rv32ima_doom*.cc rv32ima_mmio.cc
+git rm -r buildroot* risc-666 smunaut_doom doom-riscv baremetal_doom
+
+# Add new files
+git add rv32ima_base.cc rv32ima_core.h rv32ima_sdl.h
+git add Makefile README.md
+
+# Commit
+git commit -m "Major cleanup: consolidated emulator into modular design"
+```

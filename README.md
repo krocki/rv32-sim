@@ -11,6 +11,7 @@ A simple RISC-V RV32IMA instruction set simulator with optional trace output.
 - **Optional trace mode**: Full instruction and register state tracing with `--trace` flag
 - **System calls**: Basic Linux syscall support (exit, write)
 - **CSR support**: Basic Control and Status Register support
+- **DOOM Support**: Extended version with SDL2 graphics for running DOOM (see [DOOM_README.md](DOOM_README.md))
 
 ## Building
 
@@ -163,6 +164,43 @@ cd riscv-gnu-toolchain
 ./configure --prefix=/opt/riscv --with-arch=rv32ima --with-abi=ilp32
 make
 ```
+
+## DOOM Demo
+
+This simulator can run DOOM on RISC-V! Based on cnlohr's mini-rv32ima project.
+
+### Quick Start
+```bash
+# Download the DOOM image (if not already present)
+./download_doom_image.sh
+
+# Run DOOM
+./doom.sh
+```
+
+### How to Play DOOM
+1. Wait for Linux to boot (~5 seconds)
+2. At the `buildroot login:` prompt, type: `root`
+3. At the shell prompt, type: `/root/emdoom`
+4. DOOM starts immediately!
+
+### DOOM Controls
+- Arrow Keys: Move/Turn
+- Ctrl: Fire
+- Space: Use/Open doors
+- Shift: Run
+- Tab: Map
+- ESC: Menu
+
+### Technical Details
+The DOOM implementation uses:
+- 64MB RAM configuration
+- Console-based rendering (ASCII art)
+- UART at 0x10000000 for I/O
+- Linux 5.19.0 kernel with Buildroot
+- emdoom (embedded DOOM port)
+
+See [DOOM_HOWTO.md](DOOM_HOWTO.md) for detailed instructions and troubleshooting.
 
 ## License
 
