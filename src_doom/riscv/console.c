@@ -32,12 +32,28 @@ void console_init(void) {}
 void console_putchar(char c) { *uart_regs = c; }
 
 char console_getchar(void) {
-  // Not implemented for simple UART
-  return 0;
+  // Wait for keyboard input
+  volatile uint32_t *kbd_status = (volatile uint32_t *)0x11200000;
+  volatile uint32_t *kbd_data = (volatile uint32_t *)0x11200004;
+  
+  // Wait until data is available
+  while (!(*kbd_status & 1)) {
+    // Busy wait
+  }
+  
+  return *kbd_data & 0xFF;
 }
 
 int console_getchar_nowait(void) {
-  // No input available
+  // Read from keyboard MMIO at 0x11200000
+  volatile uint32_t *kbd_status = (volatile uint32_t *)0x11200000;
+  volatile uint32_t *kbd_data = (volatile uint32_t *)0x11200004;
+  
+  // Check if data is available
+  if (*kbd_status & 1) {
+    return *kbd_data & 0xFF;
+  }
+  
   return -1;
 }
 

@@ -80,9 +80,10 @@ make run-doom
 
 ```
 rv32-sim/
-├── mini-rv32ima-ref.c    # Basic console emulator
-├── rv32ima_ref_sdl.c      # SDL-enabled emulator
-├── mini-rv32ima.h         # Core emulator header
+├── rv32ima.cc             # Your original RV32IMA emulator
+├── rv32ima_ref_sdl.c      # SDL-enabled emulator for DOOM
+├── mini-rv32ima-ref.c     # Alternative console emulator
+├── mini-rv32ima.h         # Mini emulator header
 ├── default64mbdtc.h       # Device tree configuration
 ├── hello.S                # Hello world example
 ├── src_doom/              # DOOM source code

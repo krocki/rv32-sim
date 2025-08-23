@@ -11,13 +11,13 @@ SDL_FLAGS = -lSDL2
 # Default target
 all: emulator emulator-sdl hello doom
 
-# Basic console emulator
-emulator: mini-rv32ima-ref.c mini-rv32ima.h default64mbdtc.h
-	$(CC) $(CFLAGS) -o rv32ima mini-rv32ima-ref.c
+# Basic console emulator (your original implementation)
+emulator: rv32ima.cc
+	$(CXX) $(CFLAGS) -o rv32ima rv32ima.cc
 
-# SDL-enabled emulator for DOOM/graphics
-emulator-sdl: rv32ima_ref_sdl.c mini-rv32ima.h default64mbdtc.h
-	$(CC) $(CFLAGS) -DSDL2 -o rv32ima_sdl rv32ima_ref_sdl.c $(SDL_FLAGS)
+# SDL-enabled emulator for DOOM/graphics (modular version)
+emulator-sdl: rv32ima_modular.cc memory_subsystem.h memory_subsystem_sdl.h
+	$(CXX) $(CFLAGS) -o rv32ima_sdl rv32ima_modular.cc $(SDL_FLAGS)
 
 # Build hello world example
 hello: hello.S
@@ -54,9 +54,9 @@ src_doom/riscv/wad_real.o: src_doom/riscv/doom1_real.wad
 run-hello: emulator hello
 	./rv32ima hello.bin
 
-# Run DOOM
+# Run DOOM using your rv32ima with SDL memory subsystem
 run-doom: emulator-sdl doom
-	./rv32ima_sdl -f src_doom/riscv/doom-riscv.bin
+	./rv32ima_sdl --sdl -f src_doom/riscv/doom-riscv.bin
 
 # Run tests
 test: emulator
